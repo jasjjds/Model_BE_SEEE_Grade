@@ -63,11 +63,14 @@ def parse_tc(raw: str):
 # =============== SIDEBAR ===============
 st.sidebar.markdown(
     """
-    <a href="https://solris2002.github.io/home-seee-grade/" target="_self">
-        <button style="padding:0.5em 1em; border-radius:8px; border:none;
-                       background-color:#00000; color:black; font-size:16px;">
-            << Quay lại trang chủ
-        </button>
+    <style>
+      .home-btn{
+        display:inline-block; padding:.5em 1em; border-radius:8px;
+        background:#000; color:#fff !important; text-decoration:none; font-size:16px;
+      }
+    </style>
+    <a class="home-btn" href="https://solris2002.github.io/home-seee-grade/" target="_top">
+      &laquo; Quay lại trang chủ
     </a>
     """,
     unsafe_allow_html=True
