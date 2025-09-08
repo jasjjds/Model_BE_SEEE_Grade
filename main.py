@@ -12,7 +12,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.sidebar.link_button("← Quay lại trang chủ", url="https://solris2002.github.io/home-seee-grade/", use_container_width=True)
+
 
 st.title("🎓 DỰ ĐOÁN KẾT QUẢ HỌC TẬP SINH VIÊN")
 
@@ -54,21 +54,22 @@ def parse_tc(raw: str):
         return None, "Tín chỉ không phải là số nguyên hợp lệ"
 
 # =============== SIDEBAR ===============
-st.sidebar.markdown(
-    """
-    <style>
-      .home-btn{
-        display:inline-block; padding:.5em 1em; border-radius:8px;
-        background:#000; color:#fff !important; text-decoration:none; font-size:16px;
-      }
-    </style>
-    <a class="home-btn" href="https://solris2002.github.io/home-seee-grade/"
-       target="_blank" rel="noopener noreferrer">
-      &laquo; Quay lại trang chủ
-    </a>
-    """,
-    unsafe_allow_html=True
-)
+st.sidebar.link_button("← Quay lại trang chủ", url="https://solris2002.github.io/home-seee-grade/", use_container_width=True)
+# st.sidebar.markdown(
+#     """
+#     <style>
+#       .home-btn{
+#         display:inline-block; padding:.5em 1em; border-radius:8px;
+#         background:#000; color:#fff !important; text-decoration:none; font-size:16px;
+#       }
+#     </style>
+#     <a class="home-btn" href="https://solris2002.github.io/home-seee-grade/"
+#        target="_blank" rel="noopener noreferrer">
+#       &laquo; Quay lại trang chủ
+#     </a>
+#     """,
+#     unsafe_allow_html=True
+# )
 
 st.sidebar.subheader("Cài đặt đầu vào")
 
@@ -201,4 +202,5 @@ if current_semester < max_semester:
         st.error(str(e))
     except Exception as e:
         st.error(f"Đã xảy ra lỗi lúc dự đoán GPA kỳ tiếp theo: {e}")
+
 
