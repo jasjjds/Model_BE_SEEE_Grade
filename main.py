@@ -12,14 +12,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.markdown("""
-    <style>
-      .block-container { padding-left: 2rem; padding-right: 2rem; }
-      .field-error { color: #d32f2f; font-size: 0.85rem; margin-top: 0.25rem; }
-      .label-error { color: #d32f2f !important; font-weight: 600; }
-      .caption-tight { margin-bottom: 0.25rem !important; }
-    </style>
-""", unsafe_allow_html=True)
+st.sidebar.link_button("← Quay lại trang chủ", url="https://solris2002.github.io/home-seee-grade/", use_container_width=True)
 
 st.title("🎓 DỰ ĐOÁN KẾT QUẢ HỌC TẬP SINH VIÊN")
 
