@@ -49,6 +49,8 @@ def parse_tc(raw: str):
         v = int(raw)
         if v < 0:
             return None, "Tín chỉ phải là số nguyên không âm"
+        if v > 24:
+            return None, "Tín chỉ trong một kỳ thường không vượt quá 24"
         return v, None
     except ValueError:
         return None, "Tín chỉ không phải là số nguyên hợp lệ"
