@@ -1,23 +1,22 @@
-# Sử dụng image Python cơ bản
+# Dockerfile
 FROM python:3.10-slim
 
-# Cài các package hệ thống nếu cần (ví dụ: git, ffmpeg, build-essential,...)
+# 1. Cài đặt thư viện hệ thống cần thiết
 RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Tạo thư mục app
 WORKDIR /app
 
-# Copy toàn bộ source code vào container
+# 2. Copy code vào container
 COPY . /app
 
-# Cài dependencies Python
+# 3. Cài đặt thư viện Python
 RUN pip install --upgrade pip \
  && pip install -r requirements.txt
 
-# Cổng để Streamlit chạy (default 7860)
-EXPOSE 7860
+# 4. Mở port 8000 (Port chuẩn của FastAPI)
+EXPOSE 8000
 
-# Chạy ứng dụng (Streamlit app)
-CMD ["streamlit", "run", "main.py", "--server.port=7860", "--server.address=0.0.0.0"]
+# 5. Lệnh chạy server (Sử dụng uvicorn thay vì streamlit)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
