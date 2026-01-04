@@ -1,120 +1,92 @@
-# main.py (Phiên bản mới: API Backend)
+# main.py
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, field_validator
-from typing import List
-import joblib
-import numpy as np
-from pathlib import Path
+from contextlib import asynccontextmanager
+from schemas import SubjectPredictionRequest, CPAPredictionRequest, SubjectResult, CPAResult
+import services
 
-# ================= KHOI TAO APP =================
-app = FastAPI(title="Dự đoán kết quả học tập API")
+# ==========================================
+# 1. LIFESPAN: Quản lý vòng đời ứng dụng
+# (Load model khi bật, giải phóng RAM khi tắt)
+# ==========================================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Load toàn bộ model và data vào RAM
+    services.load_all_resources()
+    yield
+    # Dọn dẹp RAM khi tắt server
+    services.loaded_resources["subjects_data"].clear()
+    services.loaded_resources["general_models"].clear()
 
-# Cấu hình CORS (Cho phép Next.js gọi vào)
+# Khởi tạo App
+app = FastAPI(title="Grade Prediction System", lifespan=lifespan)
+
+# ==========================================
+# 2. MIDDLEWARE: Khắc phục lỗi CORS (405 Options)
+# ==========================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Trong thực tế nên để domain cụ thể của Next.js
+    allow_origins=["*"],      # Cho phép mọi nguồn (Frontend từ port 3000, mobile app...)
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],      # Cho phép mọi method: GET, POST, OPTIONS, PUT...
+    allow_headers=["*"],      # Cho phép mọi header
 )
 
-# ================= DATA MODELS (Pydantic) =================
-class StudentInput(BaseModel):
-    student_type: str  # "Cử nhân" hoặc "Kỹ sư"
-    current_semester: int
-    gpa_list: List[float]
-    tc_list: List[int]
+# ==========================================
+# 3. API ENDPOINTS
+# ==========================================
 
-    # Validate dữ liệu cơ bản ngay từ đầu vào
-    @field_validator('gpa_list')
-    def check_gpa_range(cls, v):
-        for score in v:
-            if not (0.0 <= score <= 4.0):
-                raise ValueError(f'GPA {score} không hợp lệ (phải từ 0.0 - 4.0)')
-        return v
-
-    @field_validator('tc_list')
-    def check_tc_range(cls, v):
-        for tc in v:
-            if tc < 0:
-                raise ValueError(f'Tín chỉ {tc} không hợp lệ (phải >= 0)')
-        return v
-
-# ================= HELPER FUNCTIONS (Giữ lại từ code cũ) =================
-def load_model_from_disk(path: str):
-    path_obj = Path(path)
-    if not path_obj.exists():
-        raise FileNotFoundError(f"Model không tìm thấy tại: {path}")
-    return joblib.load(path_obj)
-
-def build_feature_vector(gpa_list, tc_list):
-    # Logic cũ: gộp GPA và Tín chỉ xen kẽ nhau
-    features = []
-    for gpa, tc in zip(gpa_list, tc_list):
-        features.append(gpa)
-        features.append(tc)
-    return np.array(features).reshape(1, -1)
-
-def get_model_path(student_type: str, model_type: str):
-    prefix = "8" if student_type == "Cử nhân" else "10"
-    if model_type == "cpa":
-        return f"models_streamlit/final_cpa_{prefix}_ki.joblib"
-    else:
-        return f"models_streamlit/next_gpa_{prefix}_ki.joblib"
-
-# ================= API ENDPOINTS =================
 @app.get("/")
 def health_check():
-    return {"status": "running", "message": "API Dự đoán học tập đã sẵn sàng"}
+    """Kiểm tra server có sống không"""
+    return {"status": "ok", "message": "API is running"}
 
-@app.post("/predict/cpa")
-async def predict(data: StudentInput):
-    # 1. Validate số lượng
-    if len(data.gpa_list) != data.current_semester or len(data.tc_list) != data.current_semester:
-        raise HTTPException(status_code=400, detail="Số lượng điểm GPA và Tín chỉ không khớp với số kỳ đã khai báo.")
-
-    # 2. Chuẩn bị vector
-    try:
-        input_vector = build_feature_vector(data.gpa_list, data.tc_list)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Lỗi xử lý dữ liệu: {str(e)}")
-
-    response_data = {
-        "success": True,
-        "cpa_grad_predict": None,
-        "next_gpa_predict": None
-    }
-
-    # 3. Dự đoán CPA
-    try:
-        cpa_path = get_model_path(data.student_type, "cpa")
-        cpa_dict = load_model_from_disk(cpa_path)
-        
-        group_key_cpa = f"GPA_TC_1_{data.current_semester}" if data.current_semester > 1 else "GPA_TC_1"
-        
-        if group_key_cpa in cpa_dict:
-            model_cpa = cpa_dict[group_key_cpa]
-            pred = model_cpa.predict(input_vector)[0]
-            response_data["cpa_grad_predict"] = round(float(pred), 2)
-        else:
-            print(f"Warning: Không tìm thấy key {group_key_cpa} trong model CPA")
-
-    except Exception as e:
-        print(f"Lỗi dự đoán CPA: {e}")
-    max_semester = 6 if data.student_type == "Cử nhân" else 8
-    if data.current_semester < max_semester:
-        try:
-            next_path = get_model_path(data.student_type, "next")
-            next_dict = load_model_from_disk(next_path)
+# --- API 1: Dự đoán điểm môn học cụ thể (GGM) ---
+@app.post("/predict_subject", response_model=list[SubjectResult])
+def predict_subject(payload: SubjectPredictionRequest):
+    # 1. Chuyển đổi danh sách điểm từ Input (List Object) sang Dictionary {Môn: Điểm số}
+    user_grades = {}
+    for item in payload.current_grades:
+        # Convert điểm chữ (A, B+) sang số (4.0, 3.5)
+        s = services.convert_letter_to_score(item.grade)
+        # Chỉ lấy điểm hợp lệ (không phải NaN)
+        if not services.np.isnan(s):
+            user_grades[item.subject] = s
             
-            group_key_gpa = f"GPA_{data.current_semester + 1}"
-            
-            if group_key_gpa in next_dict:
-                model_next = next_dict[group_key_gpa]
-                pred_next = model_next.predict(input_vector)[0]
-                response_data["next_gpa_predict"] = round(float(pred_next), 2)
-        except Exception as e:
-             print(f"Lỗi dự đoán Next GPA: {e}")
+    # 2. Validate: Cần tối thiểu 3 môn đầu vào
+    if len(user_grades) < 3:
+        raise HTTPException(status_code=400, detail="Cần ít nhất 3 môn đã có điểm để dự đoán.")
 
-    return response_data
+    # 3. Gọi Service xử lý
+    try:
+        results = services.predict_subject_score(
+            major=payload.major, 
+            user_grades=user_grades, 
+            target_subjects=payload.target_subjects
+        )
+        return results
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi Server: {str(e)}")
+
+# --- API 2: Dự đoán CPA ra trường & GPA kỳ tới (Regression) ---
+@app.post("/predict_cpa", response_model=CPAResult)
+def predict_cpa(payload: CPAPredictionRequest):
+    # 1. Validate số lượng phần tử khớp với số kỳ
+    if len(payload.gpa_list) != payload.current_semester or len(payload.tc_list) != payload.current_semester:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Số lượng điểm GPA ({len(payload.gpa_list)}) và Tín chỉ ({len(payload.tc_list)}) không khớp với số kỳ đã khai báo ({payload.current_semester})."
+        )
+
+    # 2. Gọi Service xử lý
+    try:
+        return services.predict_cpa_general(
+            student_type=payload.student_type,
+            current_semester=payload.current_semester,
+            gpa_list=payload.gpa_list,
+            tc_list=payload.tc_list
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi Server: {str(e)}")
